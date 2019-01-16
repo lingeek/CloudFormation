@@ -56,7 +56,7 @@
       "Default": "Project_Name"
     },
     "TAGEnvironment": {
-      "Description": "This is the InfoQ environment.",
+      "Description": "This is the environment.",
       "Type": "String",
       "AllowedValues": [
         "SandBox",
