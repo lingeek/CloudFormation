@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Template for creating 2 EC2 instances in public network A",
+  "Description": "Template for creating 2 EC2 instances in public network A without internet access",
   "Parameters": {
     "TAGPROJECT": {
       "Description": "Project name",
