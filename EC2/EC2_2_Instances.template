@@ -1,6 +1,488 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "",
-  "Resources": {
+  "Description": "Template for creating 2 EC2 instances in public network A",
+  "Parameters": {
+    "TAGPROJECT": {
+      "Description": "Project name",
+      "Type": "String"
+    },
+    "TAGINST1NAME": {
+      "Description": "EC2 Instance 1 TAG Name",
+      "Type": "String"
+    },
+    "TAGINST2NAME": {
+      "Description": "EC2 Instance 2 TAG Name",
+      "Type": "String"
+    },
+    "SUBNETAPRIVIP1": {
+      "Description": "Private subnet A IP address",
+      "Type": "String"
+    },
+    "SUBNETAPRIVIP2": {
+      "Description": "Private subnet A IP address",
+      "Type": "String"
+    },
+    "InstanceType": {
+      "Description": "Instance Type",
+      "Type": "String",
+      "AllowedValues": [
+        "t2.nano",
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "t2.xlarge",
+        "t2.2xlarge"
+      ]
+    },
+    "KeyName": {
+      "Description": "Key name",
+      "Type": "String",
+      "AllowedValues": [
+        "key_Sandbox",
+        "key_Test",
+        "key_Prod"
+
+      ]
+    },
+    "TAGClass": {
+      "Description": "Accounting class",
+      "Type": "String",
+      "Default": "Company_Name"
+    },
+    "TAGClassProject": {
+      "Description": "Accounting class for project",
+      "Type": "String",
+      "Default": "Project_Name"
+    },
+    "TAGEnvironment": {
+      "Description": "This is the InfoQ environment.",
+      "Type": "String",
+      "AllowedValues": [
+        "SandBox",
+        "Test",
+        "Prod"
+
+      ]
+    },
+    "SUBDOMAIN": {
+      "Description": "DNS subdomain",
+      "Type": "String"
+    },
+    "HostedZone": {
+      "Type": "String",
+      "Description": "The DNS name of an existing Amazon Route 53 hosted zone",
+      "Default": "domain.com."
+    },
+    "TAGLevel1": {
+      "Description": "Access Level Tier 1",
+      "Type": "Number",
+      "Default": "1"
+    },
+    "TAGTier": {
+      "Description": "Access level",
+      "Type": "String",
+      "Default": "2"
+    },
+    "TAGSWAP": {
+      "Description": "SWAP",
+      "Type": "String",
+      "Default": "Swap-Volume"
+    },
+    "AddVolume":{
+      "Type":"String",
+      "Description":"Add new volume to instance.",
+      "AllowedValues": ["no","yes"],
+      "Default":"no"
+    }
+
+  },
+
+
+  "Mappings": {
+    "RegionMap": {
+      "us-weast-2": {
+        "en": "ami-XXXXX"
+      }
+
+    },
+    "AWSInstanceType2Arch": {
+      "t2.nano": {
+        "Arch": "HVM64"
+      },
+      "t2.micro": {
+        "Arch": "HVM64"
+      },
+      "t2.small": {
+        "Arch": "HVM64"
+      },
+      "t2.medium": {
+        "Arch": "HVM64"
+      },
+      "t2.large": {
+        "Arch": "HVM64"
+      },
+      "t2.xlarge": {
+        "Arch": "HVM64"
+      },
+      "t2.2xlarge": {
+        "Arch": "HVM64"
+      },
+      "m4.large": {
+        "Arch": "HVM64"
+      },
+      "m4.xlarge": {
+        "Arch": "HVM64"
+      },
+      "m4.2xlarge": {
+        "Arch": "HVM64"
+      },
+      "m4.4xlarge": {
+        "Arch": "HVM64"
+      },
+      "r4.large": {
+        "Arch": "HVM64"
+      },
+      "r4.xlarge": {
+        "Arch": "HVM64"
+      },
+      "r4.2xlarge": {
+        "Arch": "HVM64"
+      },
+      "r4.4xlarge": {
+        "Arch": "HVM64"
+      }
+    },
+    "AWSRegionArch2AMI": {
+      "us-west-2": {
+        "IMGW1": "ami-XXXXX"
+      }
+
+    }
+
+
+  },
+  "Resources":{
+
+    "Route53SSUBDOMAIN" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "DependsOn": [
+        "INSTANCE1"
+      ],
+      "Properties" : {
+        "HostedZoneName" : { "Ref" : "HostedZone" },
+        "Comment" : "DNS name for my instance.",
+        "Name" : {"Ref" : "SUBDOMAIN"},
+        "Type" : "A",
+        "TTL" : "900",
+        "ResourceRecords" : [
+          { "Fn::GetAtt" : [ "INSTANCE1", "PublicIp" ] }
+        ]
+      }
+    },
+    "SGEC2":{
+      "Type":"AWS::EC2::SecurityGroup",
+      "Properties":{
+        "GroupDescription":"Allow connections to server",
+        "VpcId":{
+          "Fn::ImportValue":{
+            "Fn::Sub":"Export::${TAGEnvironment}-VPC"
+          }
+        },
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value": {"Ref": "TAGPROJECT"}
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"TAGEnvironment"
+            }
+          },
+          {
+            "Key":"Tier",
+            "Value": {"Ref": "TAGTier"}
+          },
+          {
+            "Key": "Budget",
+            "Value": {"Ref": "TAGClass"}
+          },
+          {
+            "Key": "BudgetProject",
+            "Value": {
+              "Ref": "TAGClassProject"
+            }
+          }
+        ],
+        "SecurityGroupIngress":[
+          {
+            "IpProtocol":"tcp",
+            "FromPort":"22",
+            "ToPort":"22",
+            "CidrIp": "10.4.0.0/16"
+          },
+          { "IpProtocol" : "icmp",
+            "FromPort" : 8,
+            "ToPort" : -1,
+            "CidrIp" : "0.0.0.0/0" }
+
+
+        ]
+      }
+    },
+    "DATAVOLUME" : {
+      "Type" : "AWS::EC2::Volume",
+      "DeletionPolicy" : "Snapshot",
+      "Properties" : {
+        "Size" : "280",
+        "AvailabilityZone" : { "Fn::GetAtt" : [ "INSTANCE1", "AvailabilityZone" ] }
+      }
+    },
+    "DATAMountPoint" : {
+      "Type" : "AWS::EC2::VolumeAttachment",
+      "Properties" : {
+        "InstanceId" : { "Ref" : "INSTANCE1" },
+        "VolumeId"  : { "Ref" : "DATAVOLUME" },
+        "Device" : "/dev/xvdh"
+      }
+    },
+    "SWAPVOLUME" : {
+      "Type" : "AWS::EC2::Volume",
+      "DeletionPolicy" : "Snapshot",
+      "Properties" : {
+        "Size" : "16",
+        "AvailabilityZone" : { "Fn::GetAtt" : [ "INSTANCE1", "AvailabilityZone" ] }
+      }
+    },
+    "SWAPMountPoint" : {
+      "Type" : "AWS::EC2::VolumeAttachment",
+      "Properties" : {
+        "InstanceId" : { "Ref" : "INSTANCE1" },
+        "VolumeId"  : { "Ref" : "SWAPVOLUME" },
+        "Device" : "/dev/xvdf"
+      }
+    },
+    "INSTANCE1":{
+      "Type":"AWS::EC2::Instance",
+      "Properties":{
+        "ImageId":{
+          "Fn::FindInMap":[
+            "AWSRegionArch2AMI",
+            "us-west-2",
+            "IMGW1"
+          ]
+        },
+        "Tenancy":"default",
+        "InstanceType":{"Ref":"InstanceType" },
+        "KeyName":{
+          "Ref":"KeyName"
+        },
+
+        "NetworkInterfaces":[
+          {
+            "AssociatePublicIpAddress": "true",
+            "PrivateIpAddress": {"Ref": "SUBNETAPRIVIP1"},
+            "DeviceIndex":"0",
+            "DeleteOnTermination":"true",
+            "SubnetId":{
+              "Fn::ImportValue":{
+                "Fn::Sub":"Export::${TAGEnvironment}-SubnetPublicA"
+              }
+            },
+            "GroupSet":[
+              {
+                "Ref":"SGEC2"
+              }
+
+
+            ]
+
+          }
+        ],
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":{
+              "Ref":"TAGINST1NAME"
+            }
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"TAGEnvironment"
+            }
+          },
+          {
+            "Key":"Project",
+            "Value":{
+              "Ref":"TAGPROJECT"
+            }
+          },
+          {
+            "Key": "Budget",
+            "Value": {
+              "Ref": "TAGClass"
+            }
+          },
+          {
+            "Key": "BudgetProject",
+            "Value": {
+              "Ref": "TAGClassProject"
+            }
+          }
+        ],
+        "UserData" : { "Fn::Base64" :
+        { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "sudo yum -y install telnet",
+          "sudo hostnamectl set-hostname --static ${TAGPROJECT}"
+
+        ]]}
+        }
+
+      }
+    },
+    "INSTANCE2":{
+      "Type":"AWS::EC2::Instance",
+      "Properties":{
+        "ImageId":{
+          "Fn::FindInMap":[
+            "AWSRegionArch2AMI",
+            "us-west-2",
+            "IMGW1"
+          ]
+        },
+        "Tenancy":"default",
+        "InstanceType":{"Ref":"InstanceType" },
+        "KeyName":{
+          "Ref":"KeyName"
+        },
+
+        "NetworkInterfaces":[
+          {
+            "AssociatePublicIpAddress": "true",
+            "PrivateIpAddress": {"Ref": "SUBNETAPRIVIP2"},
+            "DeviceIndex":"0",
+            "DeleteOnTermination":"true",
+            "SubnetId":{
+              "Fn::ImportValue":{
+                "Fn::Sub":"Export::${TAGEnvironment}-SubnetPublicA"
+              }
+            },
+            "GroupSet":[
+              {
+                "Ref":"SGEC2"
+              }
+
+
+            ]
+
+          }
+        ],
+        "Tags":[
+          {
+            "Key":"Name",
+            "Value":{
+              "Ref":"TAGINST2NAME"
+            }
+          },
+          {
+            "Key":"Environment",
+            "Value":{
+              "Ref":"TAGEnvironment"
+            }
+          },
+          {
+            "Key":"Project",
+            "Value":{
+              "Ref":"TAGPROJECT"
+            }
+          },
+          {
+            "Key": "Budget",
+            "Value": {
+              "Ref": "TAGClass"
+            }
+          },
+          {
+            "Key": "BudgetProject",
+            "Value": {
+              "Ref": "TAGClassProject"
+            }
+          }
+        ],
+        "UserData" : { "Fn::Base64" :
+        { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "sudo yum -y install telnet",
+          "sudo hostnamectl set-hostname --static ${TAGPROJECT}"
+
+        ]]}
+        }
+
+      }
+    }
+  },
+  "Outputs":{
+    "SGEC2":{
+      "Description":"The security group ID to use for public EC2 instance",
+      "Value":{
+        "Fn::GetAtt":[
+          "SGEC2",
+          "GroupId"
+        ]
+      },
+
+      "Export": { "Name": {"Fn::Sub": "Export::${TAGPROJECT}-SGEC2"}}
+
+    },
+    "INSTANCE1":{
+      "Description":"INSTANCE1 description",
+      "Value":{
+        "Ref":"INSTANCE1"
+      },
+      "Export":{
+        "Name":{
+          "Fn::Sub":"Export::${TAGPROJECT}-Instance01"
+        }
+      }
+    },
+    "INSTANCE2":{
+      "Description":"INSTANCE2 description",
+      "Value":{
+        "Ref":"INSTANCE2"
+      },
+      "Export":{
+        "Name":{
+          "Fn::Sub":"Export::${TAGPROJECT}-Instance02"
+        }
+      }
+    },
+    "DATAVOLUME":{
+      "Description":"Data volume description",
+      "Value":{
+        "Ref":"DATAVOLUME"
+      },
+      "Export":{
+        "Name":{
+          "Fn::Sub":"Export::${TAGPROJECT}-DataVolume"
+        }
+      }
+    },
+    "SWAPVOLUME":{
+      "Description":"Swap volume description",
+      "Value":{
+        "Ref":"SWAPVOLUME"
+      },
+      "Export":{
+        "Name":{
+          "Fn::Sub":"Export::${TAGPROJECT}-SwapVolume"
+        }
+      }
+    }
+
   }
+
 }
+
